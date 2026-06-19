@@ -906,26 +906,66 @@ function saveEcoleSettings() {
   ecoleSettings.adminPin = document.getElementById('set-adminPin').value.trim() || ADMIN_PIN_DEFAULT;
   if (pendingLogoB64) ecoleSettings.logo = pendingLogoB64;
   saveSettings();
+  if (useFirebase) {
+    db.collection('config').doc('ecole').set(ecoleSettings)
+      .catch(e => console.warn('Firebase settings sync error:', e));
+  }
   applyBranding();
   closeModal('modal-settings');
   toast('✅ Réglages enregistrés', 'vert');
 }
 
 // ════════════════════════════════════════════════
-// STATE LOCAL
+// STATE — Firebase est la source de vérité
+// localStorage = cache hors-ligne uniquement
 // ════════════════════════════════════════════════
-let inscrits = JSON.parse(localStorage.getItem('sae_inscrits') || '[]');
+let inscrits   = JSON.parse(localStorage.getItem('sae_inscrits')   || '[]');
 let versements = JSON.parse(localStorage.getItem('sae_versements') || '[]');
-let depenses = JSON.parse(localStorage.getItem('sae_depenses') || '[]');
-let retraits = JSON.parse(localStorage.getItem('sae_retraits') || '[]');
+let depenses   = JSON.parse(localStorage.getItem('sae_depenses')   || '[]');
+let retraits   = JSON.parse(localStorage.getItem('sae_retraits')   || '[]');
 let currentRecu = null;
 let currentFinTab = 'jour';
 
+// Cache local (toujours mis à jour pour le mode hors-ligne)
 function saveLocal() {
-  localStorage.setItem('sae_inscrits', JSON.stringify(inscrits));
+  localStorage.setItem('sae_inscrits',   JSON.stringify(inscrits));
   localStorage.setItem('sae_versements', JSON.stringify(versements));
-  localStorage.setItem('sae_depenses', JSON.stringify(depenses));
-  localStorage.setItem('sae_retraits', JSON.stringify(retraits));
+  localStorage.setItem('sae_depenses',   JSON.stringify(depenses));
+  localStorage.setItem('sae_retraits',   JSON.stringify(retraits));
+}
+
+// ── Écriture Firebase ────────────────────────────
+function fbSet(collection, data) {
+  if (!useFirebase) return Promise.resolve();
+  return db.collection(collection).doc(data.id).set(data)
+    .catch(e => console.warn('Firebase write error:', e));
+}
+
+function fbDelete(collection, id) {
+  if (!useFirebase) return Promise.resolve();
+  return db.collection(collection).doc(id).delete()
+    .catch(e => console.warn('Firebase delete error:', e));
+}
+
+// ── Chargement initial depuis Firebase ──────────
+async function loadFromFirebase() {
+  if (!useFirebase) return;
+  try {
+    const [iSnap, vSnap, dSnap, rSnap] = await Promise.all([
+      db.collection('inscrits').get(),
+      db.collection('versements').get(),
+      db.collection('depenses').get(),
+      db.collection('retraits').get()
+    ]);
+    inscrits   = iSnap.docs.map(d => d.data());
+    versements = vSnap.docs.map(d => d.data());
+    depenses   = dSnap.docs.map(d => d.data());
+    retraits   = rSnap.docs.map(d => d.data());
+    saveLocal(); // mettre à jour le cache
+    console.log('✅ Données chargées depuis Firebase');
+  } catch(e) {
+    console.warn('Firebase load error, utilisation du cache local:', e);
+  }
 }
 
 // ════════════════════════════════════════════════
@@ -975,9 +1015,12 @@ function lockApp() {
 // ════════════════════════════════════════════════
 // APP INIT
 // ════════════════════════════════════════════════
-function initApp() {
+async function initApp() {
   applyBranding();
   setTodayDates();
+  // Afficher un indicateur de chargement
+  document.getElementById('tab-dashboard').innerHTML = '<div style="text-align:center;padding:40px;color:var(--gris-texte)">⏳ Chargement des données...</div>';
+  await loadFromFirebase();
   renderDashboard();
 }
 
@@ -1078,7 +1121,7 @@ function saveInscrit() {
   inscrits.push(inscrit);
   currentPhotoB64 = null;
   saveLocal();
-  syncFirebase('inscrits', inscrit);
+  fbSet('inscrits', inscrit);
   closeModal('modal-inscrit');
   toast('✅ Inscrit enregistré : ' + nom + ' ' + prenom, 'vert');
   renderInscrits();
@@ -1136,6 +1179,7 @@ function supprimerInscrit(id) {
   if (!confirm('Supprimer cet inscrit ?')) return;
   inscrits = inscrits.filter(i => i.id !== id);
   saveLocal();
+  fbDelete('inscrits', id);
   renderInscrits();
   renderDashboard();
   toast('🗑️ Inscrit supprimé');
@@ -1184,15 +1228,18 @@ function saveVersement() {
   const nouveauPaye = paye + montant;
   if (nouveauPaye >= i.total) {
     i.statut = 'Soldé';
+    fbSet('inscrits', i); // mettre à jour le statut dans Firebase
     // Créer entrée retrait si pas déjà
     if (!retraits.find(r => r.inscritId === inscritId)) {
-      retraits.push({ id: Date.now().toString() + 'r', inscritId, statut: 'En attente', dateAjout: new Date().toISOString(), montantRetrait: 0, recepisse: '' });
+      const newRet = { id: Date.now().toString() + 'r', inscritId, statut: 'En attente', dateAjout: new Date().toISOString(), montantRetrait: 0, recepisse: '' };
+      retraits.push(newRet);
+      fbSet('retraits', newRet);
     }
     toast('🎉 Solde complet ! ' + i.nom + ' basculé en retrait permis', 'vert');
   }
 
   saveLocal();
-  syncFirebase('versements', v);
+  fbSet('versements', v);
   closeModal('modal-versement');
 
   // Afficher reçu
@@ -1341,6 +1388,7 @@ function saveRetrait() {
   ret.depotDate = document.getElementById('ret-depotDate').value;
   ret.statut = document.getElementById('ret-statut').value;
   saveLocal();
+  fbSet('retraits', ret);
   closeModal('modal-retrait');
   renderRetrait();
   toast('✅ Retrait mis à jour', 'vert');
@@ -1452,14 +1500,16 @@ function saveDepense() {
   const libelle = document.getElementById('dep-libelle').value.trim();
   const montant = parseFloat(document.getElementById('dep-montant').value);
   if (!libelle || !montant) { toast('⚠️ Remplissez libellé et montant', 'rouge'); return; }
-  depenses.push({
+  const dep = {
     id: Date.now().toString(),
     libelle,
     categorie: document.getElementById('dep-categorie').value,
     montant,
     date: document.getElementById('dep-date').value
-  });
+  };
+  depenses.push(dep);
   saveLocal();
+  fbSet('depenses', dep);
   closeModal('modal-depense');
   renderFinances();
   renderDashboard();
@@ -1469,6 +1519,7 @@ function saveDepense() {
 function supprimerDepense(id) {
   if (!confirm('Supprimer cette dépense ?')) return;
   depenses = depenses.filter(d => d.id !== id);
+  fbDelete('depenses', id);
   saveLocal();
   renderFinances();
   renderDashboard();
@@ -1695,15 +1746,7 @@ function rappelWhatsApp(inscritId) {
   window.open(`https://wa.me/${i.whatsapp}?text=${msg}`, '_blank');
 }
 
-// ════════════════════════════════════════════════
-// FIREBASE SYNC
-// ════════════════════════════════════════════════
-function syncFirebase(collection, data) {
-  if (!useFirebase) return;
-  try {
-    db.collection(collection).doc(data.id).set(data);
-  } catch(e) { console.log('Firebase sync error', e); }
-}
+// syncFirebase remplacé par fbSet() et fbDelete() — voir STATE section
 
 // ════════════════════════════════════════════════
 // UTILS
@@ -1764,3 +1807,4 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
