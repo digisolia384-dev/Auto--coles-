@@ -1,69 +1,55 @@
-// ════════════════════════════════════════════════
-// SOMBKIETA AUTO ÉCOLE — Service Worker PWA
-// ════════════════════════════════════════════════
-const CACHE_NAME = 'sombkieta-v1';
-
-// Ressources à mettre en cache dès l'installation
+const CACHE_NAME = 'sae-v1';
 const ASSETS = [
   './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  './index-4.html',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap'
 ];
 
-// ─── INSTALL : mise en cache initiale ───
+// Installation : mise en cache des ressources essentielles
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS))
+      .catch(e => console.warn('SW cache partiel :', e))
   );
   self.skipWaiting();
 });
 
-// ─── ACTIVATE : nettoyage des anciens caches ───
+// Activation : suppression des anciens caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
-      )
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-// ─── FETCH : stratégie Cache-First, réseau en fallback ───
+// Fetch : cache-first pour les assets, network-first pour Firebase
 self.addEventListener('fetch', event => {
-  // Ignorer les requêtes non-GET et les requêtes Firebase/externes
-  if (event.request.method !== 'GET') return;
+  const url = event.request.url;
 
-  const url = new URL(event.request.url);
-  const isExternal = url.origin !== self.location.origin;
-
-  if (isExternal) {
-    // Pour les ressources externes (Firebase, CDN) : réseau direct
+  // Ne pas intercepter les requêtes Firebase (temps réel Firestore)
+  if (url.includes('firestore.googleapis.com') ||
+      url.includes('firebase') ||
+      url.includes('google.com/v1')) {
     return;
   }
 
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
-
-      // Pas en cache → réseau + mise en cache dynamique
       return fetch(event.request).then(response => {
-        if (!response || response.status !== 200 || response.type !== 'basic') {
-          return response;
+        // Mettre en cache les nouvelles ressources statiques
+        if (response && response.status === 200 && event.request.method === 'GET') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
-        const toCache = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache));
         return response;
-      }).catch(() => {
-        // Hors-ligne et pas en cache : rien à faire
-      });
+      }).catch(() => cached); // hors-ligne : retourner le cache si disponible
     })
   );
 });
