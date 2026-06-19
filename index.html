@@ -434,6 +434,7 @@
 
     <!-- ══ DASHBOARD ══ -->
     <div id="tab-dashboard">
+      <div id="loading-overlay" style="text-align:center;padding:40px;color:var(--gris-texte)">⏳ Chargement des données...</div>
       <div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">
         <div class="stat-card">
           <div class="stat-label">Inscrits actifs</div>
@@ -947,25 +948,56 @@ function fbDelete(collection, id) {
     .catch(e => console.warn('Firebase delete error:', e));
 }
 
-// ── Chargement initial depuis Firebase ──────────
-async function loadFromFirebase() {
-  if (!useFirebase) return;
-  try {
-    const [iSnap, vSnap, dSnap, rSnap] = await Promise.all([
-      db.collection('inscrits').get(),
-      db.collection('versements').get(),
-      db.collection('depenses').get(),
-      db.collection('retraits').get()
-    ]);
-    inscrits   = iSnap.docs.map(d => d.data());
-    versements = vSnap.docs.map(d => d.data());
-    depenses   = dSnap.docs.map(d => d.data());
-    retraits   = rSnap.docs.map(d => d.data());
-    saveLocal(); // mettre à jour le cache
-    console.log('✅ Données chargées depuis Firebase');
-  } catch(e) {
-    console.warn('Firebase load error, utilisation du cache local:', e);
-  }
+// ── Listeners temps réel Firebase (onSnapshot) ──
+// Chaque listener met à jour la variable locale ET re-rend la vue active
+let currentTab = 'dashboard';
+let _listenersReady = { inscrits: false, versements: false, depenses: false, retraits: false };
+let _appReady = false;
+
+function reRenderCurrentTab() {
+  if (!_appReady) return;
+  if (currentTab === 'dashboard')  renderDashboard();
+  if (currentTab === 'inscrits')   renderInscrits();
+  if (currentTab === 'paiements')  renderPaiements();
+  if (currentTab === 'retrait')    renderRetrait();
+  if (currentTab === 'finances')   renderFinances();
+  if (currentTab === 'rapports')   renderRapports();
+}
+
+function startRealtimeListeners(onAllReady) {
+  if (!useFirebase) { onAllReady(); return; }
+
+  const checkReady = () => {
+    if (Object.values(_listenersReady).every(Boolean)) onAllReady();
+  };
+
+  db.collection('inscrits').onSnapshot(snap => {
+    inscrits = snap.docs.map(d => d.data());
+    localStorage.setItem('sae_inscrits', JSON.stringify(inscrits));
+    if (!_listenersReady.inscrits) { _listenersReady.inscrits = true; checkReady(); }
+    else reRenderCurrentTab();
+  }, e => { console.warn('inscrits listener error:', e); _listenersReady.inscrits = true; checkReady(); });
+
+  db.collection('versements').onSnapshot(snap => {
+    versements = snap.docs.map(d => d.data());
+    localStorage.setItem('sae_versements', JSON.stringify(versements));
+    if (!_listenersReady.versements) { _listenersReady.versements = true; checkReady(); }
+    else reRenderCurrentTab();
+  }, e => { console.warn('versements listener error:', e); _listenersReady.versements = true; checkReady(); });
+
+  db.collection('depenses').onSnapshot(snap => {
+    depenses = snap.docs.map(d => d.data());
+    localStorage.setItem('sae_depenses', JSON.stringify(depenses));
+    if (!_listenersReady.depenses) { _listenersReady.depenses = true; checkReady(); }
+    else reRenderCurrentTab();
+  }, e => { console.warn('depenses listener error:', e); _listenersReady.depenses = true; checkReady(); });
+
+  db.collection('retraits').onSnapshot(snap => {
+    retraits = snap.docs.map(d => d.data());
+    localStorage.setItem('sae_retraits', JSON.stringify(retraits));
+    if (!_listenersReady.retraits) { _listenersReady.retraits = true; checkReady(); }
+    else reRenderCurrentTab();
+  }, e => { console.warn('retraits listener error:', e); _listenersReady.retraits = true; checkReady(); });
 }
 
 // ════════════════════════════════════════════════
@@ -1015,13 +1047,29 @@ function lockApp() {
 // ════════════════════════════════════════════════
 // APP INIT
 // ════════════════════════════════════════════════
-async function initApp() {
+function initApp() {
   applyBranding();
   setTodayDates();
-  // Afficher un indicateur de chargement
-  document.getElementById('tab-dashboard').innerHTML = '<div style="text-align:center;padding:40px;color:var(--gris-texte)">⏳ Chargement des données...</div>';
-  await loadFromFirebase();
-  renderDashboard();
+
+  let started = false;
+  const start = (label) => {
+    if (started) return;
+    started = true;
+    _appReady = true;
+    console.log('App démarrée via:', label, _listenersReady);
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.remove();
+    renderDashboard();
+  };
+
+  // Filet de sécurité : si Firebase ne répond pas en 4s, on démarre quand même
+  // avec les données du cache local pour ne jamais bloquer l'utilisateur.
+  const safetyTimeout = setTimeout(() => start('timeout (cache local)'), 4000);
+
+  startRealtimeListeners(() => {
+    clearTimeout(safetyTimeout);
+    start('firebase onSnapshot');
+  });
 }
 
 function setTodayDates() {
@@ -1037,16 +1085,17 @@ function setTodayDates() {
 // ════════════════════════════════════════════════
 const tabs = ['dashboard','inscrits','paiements','retrait','finances','rapports'];
 function goTab(tab) {
+  currentTab = tab;
   tabs.forEach(t => {
     document.getElementById('tab-' + t).style.display = (t === tab) ? 'block' : 'none';
     document.getElementById('nav-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'dashboard') renderDashboard();
-  if (tab === 'inscrits') renderInscrits();
+  if (tab === 'inscrits')  renderInscrits();
   if (tab === 'paiements') renderPaiements();
-  if (tab === 'retrait') renderRetrait();
-  if (tab === 'finances') renderFinances();
-  if (tab === 'rapports') renderRapports();
+  if (tab === 'retrait')   renderRetrait();
+  if (tab === 'finances')  renderFinances();
+  if (tab === 'rapports')  renderRapports();
 }
 
 // ════════════════════════════════════════════════
@@ -1800,11 +1849,12 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
       .then(reg => console.log('SW enregistré :', reg.scope))
-      .catch(err => console.log('SW erreur :', err));
+      .catch(err => console.warn('SW non disponible (sw.js manquant ou inaccessible) :', err && err.message));
   });
 }
 
 </script>
 </body>
 </html>
+
 
