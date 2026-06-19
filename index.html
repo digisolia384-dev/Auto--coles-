@@ -805,15 +805,16 @@
 
 <script>
 // ════════════════════════════════════════════════
-// FIREBASE CONFIG — Coller vos clés ici
+// FIREBASE CONFIG — Clés du projet AutoÉcole Pro
+// ⚠️ Remplacer par les vraies clés Firebase de ce projet
 // ════════════════════════════════════════════════
 const firebaseConfig = {
-  apiKey: "AIzaSyA0VLooiI4SY12FSYGkpAnCEiAyJD8FZEA",
-  authDomain: "salon-de-coiffure-43cc6.firebaseapp.com",
-  projectId: "salon-de-coiffure-43cc6",
-  storageBucket: "salon-de-coiffure-43cc6.firebasestorage.app",
-  messagingSenderId: "916460034809",
-  appId: "1:916460034809:web:f7ece2f4daf078b6e36028"
+  apiKey: "AIzaSyAn2uoRyxWM_c68YDqdRsUGbe1aahiOrxU",
+  authDomain: "planning-with-ai-a0842.firebaseapp.com",
+  projectId: "planning-with-ai-a0842",
+  storageBucket: "planning-with-ai-a0842.firebasestorage.app",
+  messagingSenderId: "424654909170",
+  appId: "1:424654909170:web:5f2d4e2de8214be9aaaa6b"
 };
 let db, storage, useFirebase = false;
 try {
@@ -907,13 +908,15 @@ function saveEcoleSettings() {
   ecoleSettings.adminPin = document.getElementById('set-adminPin').value.trim() || ADMIN_PIN_DEFAULT;
   if (pendingLogoB64) ecoleSettings.logo = pendingLogoB64;
   saveSettings();
+  // Sync Firestore — source de vérité multi-appareil (inclut adminPin et logo)
   if (useFirebase) {
     db.collection('config').doc('ecole').set(ecoleSettings)
+      .then(() => console.log('Réglages synchronisés sur Firestore'))
       .catch(e => console.warn('Firebase settings sync error:', e));
   }
   applyBranding();
   closeModal('modal-settings');
-  toast('✅ Réglages enregistrés', 'vert');
+  toast('✅ Réglages enregistrés et synchronisés', 'vert');
 }
 
 // ════════════════════════════════════════════════
@@ -967,43 +970,65 @@ function reRenderCurrentTab() {
 function startRealtimeListeners(onAllReady) {
   if (!useFirebase) { onAllReady(); return; }
 
+  // Ajout de 'config' dans le suivi des listeners (Fix multi-appareil réglages)
+  let _listenersReadyLocal = { config: false, inscrits: false, versements: false, depenses: false, retraits: false };
+
   const checkReady = () => {
-    if (Object.values(_listenersReady).every(Boolean)) onAllReady();
+    if (Object.values(_listenersReadyLocal).every(Boolean)) {
+      // Synchronise aussi _listenersReady pour reRenderCurrentTab
+      _listenersReady = { inscrits: true, versements: true, depenses: true, retraits: true };
+      onAllReady();
+    }
   };
+
+  // ── Listener config/ecole (réglages école en temps réel) ──────────────────
+  db.collection('config').doc('ecole').onSnapshot(snap => {
+    if (snap.exists) {
+      ecoleSettings = snap.data();
+      localStorage.setItem('sae_settings', JSON.stringify(ecoleSettings));
+      applyBranding();
+    }
+    if (!_listenersReadyLocal.config) { _listenersReadyLocal.config = true; checkReady(); }
+  }, e => {
+    console.warn('config listener error:', e);
+    _listenersReadyLocal.config = true; checkReady();
+  });
 
   db.collection('inscrits').onSnapshot(snap => {
     inscrits = snap.docs.map(d => d.data());
     localStorage.setItem('sae_inscrits', JSON.stringify(inscrits));
-    if (!_listenersReady.inscrits) { _listenersReady.inscrits = true; checkReady(); }
+    if (!_listenersReadyLocal.inscrits) { _listenersReadyLocal.inscrits = true; checkReady(); }
     else reRenderCurrentTab();
-  }, e => { console.warn('inscrits listener error:', e); _listenersReady.inscrits = true; checkReady(); });
+  }, e => { console.warn('inscrits listener error:', e); _listenersReadyLocal.inscrits = true; checkReady(); });
 
   db.collection('versements').onSnapshot(snap => {
     versements = snap.docs.map(d => d.data());
     localStorage.setItem('sae_versements', JSON.stringify(versements));
-    if (!_listenersReady.versements) { _listenersReady.versements = true; checkReady(); }
+    if (!_listenersReadyLocal.versements) { _listenersReadyLocal.versements = true; checkReady(); }
     else reRenderCurrentTab();
-  }, e => { console.warn('versements listener error:', e); _listenersReady.versements = true; checkReady(); });
+  }, e => { console.warn('versements listener error:', e); _listenersReadyLocal.versements = true; checkReady(); });
 
   db.collection('depenses').onSnapshot(snap => {
     depenses = snap.docs.map(d => d.data());
     localStorage.setItem('sae_depenses', JSON.stringify(depenses));
-    if (!_listenersReady.depenses) { _listenersReady.depenses = true; checkReady(); }
+    if (!_listenersReadyLocal.depenses) { _listenersReadyLocal.depenses = true; checkReady(); }
     else reRenderCurrentTab();
-  }, e => { console.warn('depenses listener error:', e); _listenersReady.depenses = true; checkReady(); });
+  }, e => { console.warn('depenses listener error:', e); _listenersReadyLocal.depenses = true; checkReady(); });
 
   db.collection('retraits').onSnapshot(snap => {
     retraits = snap.docs.map(d => d.data());
     localStorage.setItem('sae_retraits', JSON.stringify(retraits));
-    if (!_listenersReady.retraits) { _listenersReady.retraits = true; checkReady(); }
+    if (!_listenersReadyLocal.retraits) { _listenersReadyLocal.retraits = true; checkReady(); }
     else reRenderCurrentTab();
-  }, e => { console.warn('retraits listener error:', e); _listenersReady.retraits = true; checkReady(); });
+  }, e => { console.warn('retraits listener error:', e); _listenersReadyLocal.retraits = true; checkReady(); });
 }
 
 // ════════════════════════════════════════════════
-// PIN
+// PIN — Source de vérité : ecoleSettings.adminPin (synchro Firestore)
+// Le PIN affiché sur l'écran de verrouillage est le PIN utilisateur (4 chiffres)
+// stocké dans ecoleSettings via Firestore/localStorage
 // ════════════════════════════════════════════════
-const PIN_CODE = localStorage.getItem('sae_pin') || '1234';
+// PIN_CODE est résolu dynamiquement depuis ecoleSettings (mis à jour par onSnapshot config)
 let pinBuffer = '';
 
 function pinPress(d) {
@@ -1025,6 +1050,8 @@ function updatePinDots() {
 }
 
 function checkPin() {
+  // PIN résolu dynamiquement depuis ecoleSettings (synchro Firestore multi-appareil)
+  const PIN_CODE = ecoleSettings.adminPin || ADMIN_PIN_DEFAULT;
   if (pinBuffer === PIN_CODE) {
     document.getElementById('pin-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -1856,5 +1883,3 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
-
-
