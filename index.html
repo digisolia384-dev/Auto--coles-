@@ -264,13 +264,13 @@
   /* ─── RECU PREVIEW ─── */
   .recu-preview {
     background:#fff; border:1px dashed #ccc; border-radius:10px;
-    padding:16px; font-family:'Courier New', monospace; font-size:12px;
-    line-height:1.8; max-width:320px; margin:0 auto;
+    padding:20px; font-family:'Inter', sans-serif; font-size:13px;
+    line-height:1.9; max-width:320px; margin:0 auto;
   }
-  .recu-preview h2 { text-align:center; font-size:14px; font-weight:700; }
-  .recu-preview .recu-sep { border-top:1px dashed #999; margin:8px 0; }
-  .recu-preview .recu-row { display:flex; justify-content:space-between; }
-  .recu-preview .recu-logo { display:block; width:60px; height:60px; object-fit:cover; border-radius:50%; margin:0 auto 6px; }
+  .recu-preview h2 { font-family:'Space Grotesk',sans-serif; text-align:center; font-size:16px; font-weight:700; }
+  .recu-preview .recu-sep { border-top:1px dashed #ccc; margin:10px 0; }
+  .recu-preview .recu-row { display:flex; justify-content:space-between; align-items:center; }
+  .recu-preview .recu-logo { display:block; width:64px; height:64px; object-fit:cover; border-radius:50%; margin:0 auto 8px; }
   .recu-signature {
     display:flex; justify-content:space-between; align-items:flex-end;
     margin-top:14px; gap:12px;
@@ -426,6 +426,7 @@
     <button class="nav-item" onclick="goTab('inscrits')" id="nav-inscrits"><span>👤</span>Inscrits</button>
     <button class="nav-item" onclick="goTab('paiements')" id="nav-paiements"><span>💳</span>Paiements</button>
     <button class="nav-item" onclick="goTab('retrait')" id="nav-retrait"><span>📋</span>Retraits</button>
+    <button class="nav-item" onclick="goTab('rappels')" id="nav-rappels"><span>🔔</span>Rappels</button>
     <button class="nav-item" onclick="goTab('finances')" id="nav-finances"><span>📈</span>Finances</button>
     <button class="nav-item" onclick="goTab('rapports')" id="nav-rapports"><span>📄</span>Rapports</button>
   </div>
@@ -520,6 +521,27 @@
       <div id="list-retrait"></div>
     </div>
 
+    <!-- ══ RAPPELS ══ -->
+    <div id="tab-rappels" style="display:none">
+      <div class="section-header">
+        <div class="section-title">🔔 Module Rappels — Reste à payer</div>
+      </div>
+      <div class="card" style="background:linear-gradient(135deg,#FFF7ED,#FFF0E0);border:1.5px solid var(--orange);margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#9A3412">💰 Total restant à percevoir</div>
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;color:var(--orange);margin-top:4px" id="stat-total-reste">0 FCFA</div>
+            <div style="font-size:11px;color:#9A3412;margin-top:2px"><span id="stat-nb-rappels">0</span> inscrit(s) avec solde restant</div>
+          </div>
+          <div style="font-size:40px;opacity:0.3">📲</div>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input type="text" id="search-rappel" placeholder="🔍 Rechercher un inscrit..." oninput="renderRappels()">
+      </div>
+      <div id="list-rappels"></div>
+    </div>
+
     <!-- ══ FINANCES ══ -->
     <div id="tab-finances" style="display:none">
       <div class="section-header">
@@ -552,14 +574,19 @@
 <!-- Modal: Nouvel inscrit -->
 <div class="modal-overlay" id="modal-inscrit">
   <div class="modal">
-    <h2>➕ Nouvel Inscrit</h2>
+    <h2 id="modal-inscrit-title">➕ Nouvel Inscrit</h2>
+    <input type="hidden" id="form-inscrit-id">
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
-      <div class="photo-upload" id="photo-preview" onclick="document.getElementById('photo-input').click()">
+      <div class="photo-upload" id="photo-preview">
         <span style="font-size:24px">📷</span>
         <span>Photo</span>
-        <input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(this)">
       </div>
       <div style="flex:1">
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+          <button type="button" class="btn btn-xs btn-secondary" onclick="openCamera()">📷 Prendre une photo</button>
+          <button type="button" class="btn btn-xs btn-secondary" onclick="document.getElementById('photo-input-galerie').click()">🖼️ Galerie</button>
+          <input type="file" id="photo-input-galerie" accept="image/*" style="display:none" onchange="handlePhoto(this)">
+        </div>
         <div class="form-group">
           <label>N° Dossier (auto)</label>
           <input type="text" id="form-ndossier" readonly placeholder="Auto-généré">
@@ -577,7 +604,7 @@
       </div>
       <div class="form-group">
         <label>Date de naissance *</label>
-        <input type="date" id="form-datenais">
+        <input type="text" id="form-datenais" placeholder="JJ/MM/AAAA" inputmode="numeric" maxlength="10" oninput="maskDateInput(this)">
       </div>
       <div class="form-group">
         <label>Lieu de naissance</label>
@@ -612,7 +639,22 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-inscrit')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveInscrit()">💾 Enregistrer</button>
+      <button class="btn btn-primary" id="btn-save-inscrit" onclick="saveInscrit()">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Caméra (prise de photo directe) -->
+<div class="modal-overlay" id="modal-camera">
+  <div class="modal" style="max-width:380px">
+    <h2>📷 Prendre une photo</h2>
+    <div style="background:#000;border-radius:12px;overflow:hidden;position:relative;aspect-ratio:1/1">
+      <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+    </div>
+    <canvas id="camera-canvas" style="display:none"></canvas>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="btn btn-secondary" onclick="closeCamera()">Annuler</button>
+      <button class="btn btn-primary" onclick="capturePhoto()">📸 Capturer</button>
     </div>
   </div>
 </div>
@@ -1110,7 +1152,7 @@ function setTodayDates() {
 // ════════════════════════════════════════════════
 // NAVIGATION
 // ════════════════════════════════════════════════
-const tabs = ['dashboard','inscrits','paiements','retrait','finances','rapports'];
+const tabs = ['dashboard','inscrits','paiements','retrait','rappels','finances','rapports'];
 function goTab(tab) {
   currentTab = tab;
   tabs.forEach(t => {
@@ -1121,6 +1163,7 @@ function goTab(tab) {
   if (tab === 'inscrits')  renderInscrits();
   if (tab === 'paiements') renderPaiements();
   if (tab === 'retrait')   renderRetrait();
+  if (tab === 'rappels')   renderRappels();
   if (tab === 'finances')  renderFinances();
   if (tab === 'rapports')  renderRapports();
 }
@@ -1129,9 +1172,11 @@ function goTab(tab) {
 // MODALS
 // ════════════════════════════════════════════════
 function showModal(id) {
-  if (id === 'modal-inscrit') {
+  if (id === 'modal-inscrit' && !document.getElementById('form-inscrit-id').value) {
     const num = inscrits.length + 1;
     const year = new Date().getFullYear();
+    document.getElementById('modal-inscrit-title').textContent = '➕ Nouvel Inscrit';
+    document.getElementById('btn-save-inscrit').textContent = '💾 Enregistrer';
     document.getElementById('form-ndossier').value = `SKA-${year}-${String(num).padStart(3,'0')}`;
     document.getElementById('form-nom').value = '';
     document.getElementById('form-prenom').value = '';
@@ -1141,12 +1186,18 @@ function showModal(id) {
     document.getElementById('form-tel2').value = '';
     document.getElementById('form-total').value = '';
     document.getElementById('form-inscription').value = '';
-    document.getElementById('photo-preview').innerHTML = '<span style="font-size:24px">📷</span><span>Photo</span><input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(this)">';
+    document.getElementById('form-categorie').value = 'B';
+    currentPhotoB64 = null;
+    document.getElementById('photo-preview').innerHTML = '<span style="font-size:24px">📷</span><span>Photo</span>';
   }
   document.getElementById(id).classList.add('open');
 }
 
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'modal-inscrit') document.getElementById('form-inscrit-id').value = '';
+  if (id === 'modal-camera' && cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+}
 
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); });
@@ -1161,23 +1212,112 @@ function handlePhoto(input) {
   const reader = new FileReader();
   reader.onload = e => {
     currentPhotoB64 = e.target.result;
-    document.getElementById('photo-preview').innerHTML = `<img src="${currentPhotoB64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"><input type="file" id="photo-input" accept="image/*" onchange="handlePhoto(this)" style="position:absolute;inset:0;opacity:0;cursor:pointer">`;
+    document.getElementById('photo-preview').innerHTML = `<img src="${currentPhotoB64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
   };
   reader.readAsDataURL(input.files[0]);
 }
 
 // ════════════════════════════════════════════════
+// CAMÉRA (prise de photo directe via getUserMedia)
+// ════════════════════════════════════════════════
+let cameraStream = null;
+function openCamera() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('⚠️ Caméra non disponible, utilisez la galerie', 'rouge');
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    .then(stream => {
+      cameraStream = stream;
+      const video = document.getElementById('camera-video');
+      video.srcObject = stream;
+      document.getElementById('modal-camera').classList.add('open');
+    })
+    .catch(() => {
+      toast('⚠️ Accès à la caméra refusé ou indisponible', 'rouge');
+    });
+}
+
+function capturePhoto() {
+  const video = document.getElementById('camera-video');
+  const canvas = document.getElementById('camera-canvas');
+  const size = Math.min(video.videoWidth, video.videoHeight);
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const sx = (video.videoWidth - size) / 2;
+  const sy = (video.videoHeight - size) / 2;
+  ctx.drawImage(video, sx, sy, size, size, 0, 0, size, size);
+  currentPhotoB64 = canvas.toDataURL('image/jpeg', 0.85);
+  document.getElementById('photo-preview').innerHTML = `<img src="${currentPhotoB64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  closeCamera();
+}
+
+function closeCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  document.getElementById('modal-camera').classList.remove('open');
+}
+
+// ════════════════════════════════════════════════
 // INSCRITS
 // ════════════════════════════════════════════════
+function editerInscrit(id) {
+  const i = inscrits.find(x => x.id === id);
+  if (!i) return;
+  showModal('modal-inscrit'); // ouvre d'abord (reset car id encore vide à ce stade)
+  document.getElementById('form-inscrit-id').value = i.id;
+  document.getElementById('modal-inscrit-title').textContent = '✏️ Modifier Inscrit';
+  document.getElementById('btn-save-inscrit').textContent = '💾 Mettre à jour';
+  document.getElementById('form-ndossier').value = i.ndossier;
+  document.getElementById('form-nom').value = i.nom;
+  document.getElementById('form-prenom').value = i.prenom;
+  document.getElementById('form-datenais').value = isoToDateInput(i.datenais);
+  document.getElementById('form-lieunais').value = i.lieunais || '';
+  document.getElementById('form-whatsapp').value = i.whatsapp;
+  document.getElementById('form-tel2').value = i.tel2 || '';
+  document.getElementById('form-categorie').value = i.categorie;
+  document.getElementById('form-total').value = i.total;
+  document.getElementById('form-inscription').value = i.fraisInscription || '';
+  currentPhotoB64 = i.photo || null;
+  document.getElementById('photo-preview').innerHTML = i.photo
+    ? `<img src="${i.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : '<span style="font-size:24px">📷</span><span>Photo</span>';
+}
+
 function saveInscrit() {
+  const editId = document.getElementById('form-inscrit-id').value;
   const nom = document.getElementById('form-nom').value.trim();
   const prenom = document.getElementById('form-prenom').value.trim();
-  const datenais = document.getElementById('form-datenais').value;
+  const datenaisInput = document.getElementById('form-datenais').value.trim();
+  const datenais = dateToISO(datenaisInput);
   const whatsapp = document.getElementById('form-whatsapp').value.trim();
   const total = parseFloat(document.getElementById('form-total').value);
 
-  if (!nom || !prenom || !datenais || !whatsapp || !total) {
+  if (!nom || !prenom || !datenaisInput || !whatsapp || !total) {
     toast('⚠️ Remplissez les champs obligatoires', 'rouge'); return;
+  }
+  if (!datenais) {
+    toast('⚠️ Date de naissance invalide (format JJ/MM/AAAA)', 'rouge'); return;
+  }
+
+  if (editId) {
+    const i = inscrits.find(x => x.id === editId);
+    if (!i) return;
+    i.nom = nom; i.prenom = prenom; i.datenais = datenais;
+    i.lieunais = document.getElementById('form-lieunais').value.trim();
+    i.whatsapp = whatsapp; i.tel2 = document.getElementById('form-tel2').value.trim();
+    i.categorie = document.getElementById('form-categorie').value;
+    i.total = total;
+    i.fraisInscription = parseFloat(document.getElementById('form-inscription').value) || 0;
+    i.photo = currentPhotoB64 || null;
+
+    currentPhotoB64 = null;
+    saveLocal();
+    fbSet('inscrits', i);
+    closeModal('modal-inscrit');
+    toast('✅ Inscrit mis à jour : ' + nom + ' ' + prenom, 'vert');
+    renderInscrits();
+    renderDashboard();
+    return;
   }
 
   const inscrit = {
@@ -1240,6 +1380,7 @@ function renderInscrits() {
       <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
       <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
         <button class="btn btn-xs btn-primary" onclick="ouvrirVersement('${i.id}')">💳 Versement</button>
+        <button class="btn btn-xs btn-secondary" onclick="editerInscrit('${i.id}')">✏️ Modifier</button>
         <button class="btn btn-xs btn-secondary" onclick="rappelWhatsApp('${i.id}')">📱 Rappel WA</button>
         <button class="btn btn-xs btn-secondary" onclick="supprimerInscrit('${i.id}')">🗑️</button>
       </div>
@@ -1259,6 +1400,48 @@ function supprimerInscrit(id) {
   renderInscrits();
   renderDashboard();
   toast('🗑️ Inscrit supprimé');
+}
+
+// ════════════════════════════════════════════════
+// RAPPELS — Module reste à payer
+// ════════════════════════════════════════════════
+function renderRappels() {
+  const q = (document.getElementById('search-rappel')?.value || '').toLowerCase();
+  const enDette = inscrits
+    .map(i => ({ i, paye: totalPaye(i.id) }))
+    .map(x => ({ ...x, reste: x.i.total - x.paye }))
+    .filter(x => x.reste > 0)
+    .filter(x => (x.i.nom + ' ' + x.i.prenom + ' ' + x.i.whatsapp).toLowerCase().includes(q))
+    .sort((a,b) => b.reste - a.reste);
+
+  const totalReste = enDette.reduce((s,x) => s + x.reste, 0);
+  document.getElementById('stat-total-reste').textContent = fMnt(totalReste);
+  document.getElementById('stat-nb-rappels').textContent = enDette.length;
+
+  const el = document.getElementById('list-rappels');
+  if (enDette.length === 0) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🔔</div><h3>Aucun rappel</h3><p>Tous les inscrits sont à jour dans leurs paiements</p></div>`;
+    return;
+  }
+  el.innerHTML = enDette.map(({i, paye, reste}) => {
+    const pct = Math.min(100, Math.round((paye / i.total) * 100));
+    return `<div class="card retrait-card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div class="inscrit-photo" style="width:40px;height:40px">${i.photo ? `<img src="${i.photo}">` : '👤'}</div>
+        <div style="flex:1">
+          <div style="font-weight:600">${i.nom} ${i.prenom}</div>
+          <div style="font-size:12px;color:var(--gris-texte)">${i.ndossier} · Permis ${i.categorie}</div>
+        </div>
+        <span class="badge badge-rouge">${fMnt(reste)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--gris-texte);margin-bottom:4px">${pct}% payé · Total: ${fMnt(i.total)}</div>
+      <div class="progress-bar"><div class="progress-fill partiel" style="width:${pct}%"></div></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-sm btn-primary" onclick="ouvrirVersement('${i.id}')">💳 Versement</button>
+        <button class="btn btn-sm btn-secondary" onclick="rappelWhatsApp('${i.id}')">📱 Rappeler via WhatsApp</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ════════════════════════════════════════════════
@@ -1325,35 +1508,20 @@ function saveVersement() {
 function afficherRecu(i, v, totalPaye) {
   currentRecu = { i, v, totalPaye };
   const reste = Math.max(0, i.total - totalPaye);
-  const numVrs = versements.filter(x => x.inscritId === i.id).length;
 
   document.getElementById('recu-preview-content').innerHTML = `
     <div class="recu-preview" id="recu-to-print">
       <img class="recu-logo" src="${ecoleSettings.logo}" alt="Logo">
       <h2>${ecoleSettings.nomEcole}</h2>
-      <div style="text-align:center;font-size:11px">${ecoleSettings.adresse}<br>Tél: ${ecoleSettings.telephone}</div>
       <div class="recu-sep"></div>
-      <div style="text-align:center;font-weight:700;font-size:13px">REÇU DE VERSEMENT</div>
-      <div style="text-align:center;font-size:10px">N° ${v.numRecu}</div>
+      <div style="text-align:center;font-weight:700;font-size:14px">REÇU DE VERSEMENT</div>
       <div class="recu-sep"></div>
-      <div class="recu-row"><span>Inscrit:</span><span><b>${i.nom} ${i.prenom}</b></span></div>
-      <div class="recu-row"><span>Dossier:</span><span>${i.ndossier}</span></div>
-      <div class="recu-row"><span>Permis:</span><span>Catégorie ${i.categorie}</span></div>
-      <div class="recu-row"><span>Date:</span><span>${fDate(v.date)}</span></div>
+      <div class="recu-row"><span>Inscrit :</span><span style="font-weight:700;font-size:14px">${i.nom} ${i.prenom}</span></div>
       <div class="recu-sep"></div>
-      <div class="recu-row"><span>N° versement:</span><span>${numVrs}</span></div>
-      <div class="recu-row"><span>Montant versé:</span><span><b>${fMnt(v.montant)}</b></span></div>
-      <div class="recu-row"><span>Total payé:</span><span>${fMnt(totalPaye)}</span></div>
-      <div class="recu-row"><span>Reste à payer:</span><span><b style="color:${reste>0?'red':'green'}">${reste > 0 ? fMnt(reste) : '✅ SOLDÉ'}</b></span></div>
+      <div class="recu-row"><span>Montant versé :</span><span style="font-weight:700;font-size:16px;color:var(--vert)">${fMnt(v.montant)}</span></div>
+      <div class="recu-row"><span>Reste à payer :</span><span style="font-weight:700;font-size:16px;color:${reste>0?'#DC2626':'var(--vert)'}">${reste > 0 ? fMnt(reste) : '✅ SOLDÉ'}</span></div>
       <div class="recu-sep"></div>
-      <div style="text-align:center;font-size:10px">Obs: ${v.obs || '—'}</div>
-      <div class="recu-sep"></div>
-      <div class="recu-signature">
-        <div class="resp"><span class="label">Le Responsable</span><br><b>${ecoleSettings.responsable || '—'}</b></div>
-        <div class="tampon">Cachet /<br>Signature</div>
-      </div>
-      <div class="recu-sep"></div>
-      <div style="text-align:center;font-size:10px">Merci pour votre confiance !<br>Bonne route 🚗</div>
+      <div style="text-align:center;font-size:11px;color:#888">Merci pour votre confiance !<br>Bonne route 🚗</div>
     </div>
   `;
   showModal('modal-recu');
@@ -1437,7 +1605,7 @@ function renderRetrait() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-sm btn-primary" onclick="ouvrirRetrait('${i.id}')">✏️ Mettre à jour</button>
         ${ret.montantRetrait > 0 ? `<button class="btn btn-sm btn-secondary" onclick="recuRetrait('${i.id}')">🖨️ Reçu retrait</button>` : ''}
-        <button class="btn btn-sm btn-secondary" onclick="rappelWhatsApp('${i.id}')">📱 WhatsApp</button>
+        <button class="btn btn-sm btn-secondary" onclick="rappelProvisoireWhatsApp('${i.id}')">📲 Rappel provisoire dispo</button>
       </div>
     </div>`;
   }).join('');
@@ -1673,7 +1841,13 @@ function arreterCompte(monthKey, monthLabel) {
 function printRapport() {
   const zone = document.getElementById('rapport-print-zone');
   const win = window.open('', '_blank');
-  win.document.write(`<html><head><title>Rapport</title><style>body{font-family:'Courier New',monospace;font-size:13px;line-height:2;padding:20px;max-width:600px;margin:0 auto}</style></head><body>${zone.innerHTML}</body></html>`);
+  win.document.write(`<html><head><title>Rapport</title><style>
+  @page { size: A4; margin: 18mm; }
+  body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.7;max-width:174mm;margin:0 auto;color:#0D0D0D}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px 8px;border-bottom:1px solid #ddd;text-align:left;font-size:12px}
+  </style></head><body>${zone.innerHTML}</body></html>`);
   win.document.close();
   win.print();
 }
@@ -1735,36 +1909,98 @@ function renderDashboard() {
 // ════════════════════════════════════════════════
 // IMPRESSION
 // ════════════════════════════════════════════════
+const BT_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
+const BT_CHAR_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
+let btDevice = null;
+let btCharacteristic = null;
+
+// Construit le texte du reçu formaté pour une largeur thermique 80mm (~32 colonnes)
+function buildPosReceiptText() {
+  if (!currentRecu) return '';
+  const { i, v, totalPaye } = currentRecu;
+  const reste = Math.max(0, i.total - totalPaye);
+  const W = 32;
+  const center = s => { s = String(s); const pad = Math.max(0, Math.floor((W - s.length) / 2)); return ' '.repeat(pad) + s; };
+  const sep = '-'.repeat(W);
+  const row = (label, val) => {
+    label = String(label); val = String(val);
+    const space = Math.max(1, W - label.length - val.length);
+    return label + ' '.repeat(space) + val;
+  };
+  const lines = [];
+  lines.push(center(ecoleSettings.nomEcole || ''));
+  lines.push(sep);
+  lines.push(center('REÇU DE VERSEMENT'));
+  lines.push(sep);
+  lines.push(row('Inscrit:', `${i.nom} ${i.prenom}`));
+  lines.push(sep);
+  lines.push(row('Montant verse:', fMnt(v.montant)));
+  lines.push(row('Reste a payer:', reste > 0 ? fMnt(reste) : 'SOLDE'));
+  lines.push(sep);
+  lines.push(center('Merci pour votre confiance !'));
+  lines.push(center('Bonne route'));
+  lines.push('');
+  lines.push('');
+  return lines.join('\n');
+}
+
+// Récupère (ou réutilise) la caractéristique BLE de l'imprimante POS80C
+function getBtCharacteristic() {
+  if (btCharacteristic && btDevice && btDevice.gatt.connected) {
+    return Promise.resolve(btCharacteristic);
+  }
+  return navigator.bluetooth.requestDevice({
+    filters: [
+      { namePrefix: 'POS' }, { namePrefix: 'Printer' }, { namePrefix: 'BlueTooth Printer' },
+      { namePrefix: 'MTP' }, { namePrefix: 'GP' }, { namePrefix: 'XP' }, { namePrefix: 'RPP' },
+      { namePrefix: 'PT-' }, { namePrefix: 'BT' }, { namePrefix: 'Printer' }
+    ],
+    optionalServices: [BT_SERVICE_UUID]
+  })
+  .catch(() => navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [BT_SERVICE_UUID] }))
+  .then(dev => {
+    btDevice = dev;
+    return dev.gatt.connect();
+  })
+  .then(server => server.getPrimaryService(BT_SERVICE_UUID))
+  .then(service => service.getCharacteristic(BT_CHAR_UUID))
+  .then(char => { btCharacteristic = char; return char; });
+}
+
 function printPOS() {
-  const content = document.getElementById('recu-to-print');
-  if (!content) return;
-  // Web Bluetooth POS80C ESC/POS
-  if (navigator.bluetooth) {
-    navigator.bluetooth.requestDevice({ filters:[{name:'POS80C'},{namePrefix:'POS'},{namePrefix:'Printer'}], optionalServices:['000018f0-0000-1000-8000-00805f9b34fb'] })
-    .then(dev => dev.gatt.connect())
-    .then(server => server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb'))
-    .then(service => service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb'))
-    .then(char => {
-      const text = content.innerText;
-      const enc = new TextEncoder();
-      const ESC = 0x1B, LF = 0x0A, GS = 0x1D;
-      let buf = [];
-      const push = (...bytes) => bytes.forEach(b => buf.push(b));
-      push(ESC,0x40); // Init
-      push(ESC,0x61,0x01); // Center
-      push(ESC,0x21,0x10); // Double height
-      const lines = text.split('\n');
-      lines.forEach(l => {
-        const b = enc.encode(l + '\n');
-        b.forEach(x => buf.push(x));
-      });
-      push(GS,0x56,0x42,0x00); // Cut
-      const data = new Uint8Array(buf);
-      return char.writeValue(data);
-    })
-    .then(() => { toast('✅ Imprimé sur POS80C', 'vert'); closeModal('modal-recu'); })
-    .catch(() => printWindowFallback());
-  } else printWindowFallback();
+  if (!currentRecu) { toast('⚠️ Aucun reçu à imprimer', 'rouge'); return; }
+  if (!navigator.bluetooth) {
+    toast('⚠️ Bluetooth non supporté par ce navigateur', 'rouge');
+    printPOS80Fallback();
+    return;
+  }
+  toast('🔄 Connexion à l\'imprimante BLE 80mm…');
+  getBtCharacteristic().then(char => {
+    const text = buildPosReceiptText();
+    const enc = new TextEncoder();
+    const ESC = 0x1B, GS = 0x1D;
+    let buf = [];
+    const push = (...bytes) => bytes.forEach(b => buf.push(b));
+    push(ESC, 0x40); // Init
+    push(ESC, 0x61, 0x00); // Align gauche (texte déjà centré manuellement)
+    enc.encode(text + '\n').forEach(b => buf.push(b));
+    push(GS, 0x56, 0x42, 0x00); // Coupe papier
+    // Envoi par petits paquets (compatibilité BLE write 20 octets)
+    const data = new Uint8Array(buf);
+    const chunkSize = 100;
+    let chain = Promise.resolve();
+    for (let offset = 0; offset < data.length; offset += chunkSize) {
+      const chunk = data.slice(offset, offset + chunkSize);
+      chain = chain.then(() => char.writeValue(chunk));
+    }
+    return chain;
+  })
+  .then(() => { toast('✅ Imprimé sur imprimante BLE 80mm', 'vert'); closeModal('modal-recu'); })
+  .catch(err => {
+    console.warn('Impression BLE échouée:', err);
+    toast('⚠️ Connexion BLE impossible — impression via le navigateur', 'rouge');
+    printPOS80Fallback();
+  });
 }
 
 function printA4() { printWindowFallback(); }
@@ -1774,14 +2010,37 @@ function printWindowFallback() {
   if (!content) return;
   const win = window.open('', '_blank');
   win.document.write(`<html><head><title>Reçu</title>
-  <style>body{font-family:'Courier New',monospace;font-size:13px;line-height:1.8;padding:24px;max-width:400px;margin:0 auto}
-  h2{text-align:center;font-size:15px}.sep{border-top:1px dashed #999;margin:8px 0}.row{display:flex;justify-content:space-between}
-  .recu-logo{display:block;width:60px;height:60px;object-fit:cover;border-radius:50%;margin:0 auto 6px}
-  .recu-sep{border-top:1px dashed #999;margin:8px 0}.recu-row{display:flex;justify-content:space-between}
+  <style>
+  @page { size: A4; margin: 20mm; }
+  body{font-family:'Inter',sans-serif;font-size:14px;line-height:1.9;max-width:400px;margin:0 auto}
+  h2{text-align:center;font-size:17px;font-weight:700}.sep{border-top:1px dashed #ccc;margin:10px 0}.row{display:flex;justify-content:space-between}
+  .recu-logo{display:block;width:64px;height:64px;object-fit:cover;border-radius:50%;margin:0 auto 8px}
+  .recu-sep{border-top:1px dashed #ccc;margin:10px 0}.recu-row{display:flex;justify-content:space-between;align-items:center}
   .recu-signature{display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;gap:12px}
   .recu-signature .resp{font-size:11px;text-align:left}
   .recu-signature .resp .label{color:#777}
   .recu-signature .tampon{width:90px;height:70px;border:1px dashed #999;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999;text-align:center;flex-shrink:0}
+  </style></head>
+  <body>${content.innerHTML}</body></html>`);
+  win.document.close();
+  setTimeout(() => win.print(), 500);
+}
+
+function printPOS80Fallback() {
+  const content = document.getElementById('recu-to-print');
+  if (!content) return;
+  const win = window.open('', '_blank');
+  win.document.write(`<html><head><title>Reçu</title>
+  <style>
+  @page { size: 80mm auto; margin: 3mm; }
+  body{font-family:'Inter',sans-serif;font-size:13px;line-height:1.7;width:74mm;margin:0 auto;padding:0}
+  h2{text-align:center;font-size:15px;font-weight:700}.sep{border-top:1px dashed #ccc;margin:8px 0}.row{display:flex;justify-content:space-between}
+  .recu-logo{display:block;width:56px;height:56px;object-fit:cover;border-radius:50%;margin:0 auto 8px}
+  .recu-sep{border-top:1px dashed #ccc;margin:8px 0}.recu-row{display:flex;justify-content:space-between;align-items:center}
+  .recu-signature{display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;gap:12px}
+  .recu-signature .resp{font-size:11px;text-align:left}
+  .recu-signature .resp .label{color:#777}
+  .recu-signature .tampon{width:80px;height:60px;border:1px dashed #999;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999;text-align:center;flex-shrink:0}
   </style></head>
   <body>${content.innerHTML}</body></html>`);
   win.document.close();
@@ -1803,6 +2062,20 @@ function shareWhatsApp() {
     `Total payé: ${fMnt(totalPaye)}\n` +
     `Reste à payer: *${reste > 0 ? fMnt(reste) : '✅ SOLDÉ'}*\n\n` +
     `Merci pour votre confiance ! 🚗`
+  );
+  window.open(`https://wa.me/${i.whatsapp}?text=${msg}`, '_blank');
+}
+
+function rappelProvisoireWhatsApp(inscritId) {
+  const i = inscrits.find(x => x.id === inscritId);
+  const ret = retraits.find(r => r.inscritId === inscritId) || {};
+  const msg = encodeURIComponent(
+    `🏫 *${ecoleSettings.nomEcole}*\n` +
+    `Bonjour *${i.prenom} ${i.nom}*,\n\n` +
+    `🎉 Votre permis provisoire (Catégorie ${i.categorie}) est disponible !\n` +
+    `📋 Dossier: ${i.ndossier}\n${ret.recepisse ? `🧾 Récépissé: ${ret.recepisse}\n` : ''}\n` +
+    `Vous pouvez venir le récupérer à l'auto-école dès que possible.\n` +
+    `📞 ${ecoleSettings.telephone}`
   );
   window.open(`https://wa.me/${i.whatsapp}?text=${msg}`, '_blank');
 }
@@ -1832,6 +2105,29 @@ function fDate(s) {
   if (!s) return '—';
   const d = new Date(s + (s.length===10?'T00:00:00':''));
   return d.toLocaleDateString('fr-FR');
+}
+// Saisie manuelle JJ/MM/AAAA → ajoute les "/" automatiquement en tapant
+function maskDateInput(input) {
+  let v = input.value.replace(/[^\d]/g, '').slice(0, 8);
+  if (v.length >= 5) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
+  else if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  input.value = v;
+}
+// JJ/MM/AAAA (saisie) → AAAA-MM-JJ (stockage ISO)
+function dateToISO(jjmmaaaa) {
+  const m = (jjmmaaaa||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const [, jj, mm, aaaa] = m;
+  const d = new Date(`${aaaa}-${mm}-${jj}T00:00:00`);
+  if (isNaN(d.getTime()) || d.getDate() !== parseInt(jj,10) || (d.getMonth()+1) !== parseInt(mm,10)) return null;
+  return `${aaaa}-${mm}-${jj}`;
+}
+// AAAA-MM-JJ (stockage ISO) → JJ/MM/AAAA (affichage/saisie)
+function isoToDateInput(iso) {
+  if (!iso) return '';
+  const [aaaa, mm, jj] = iso.split('-');
+  if (!aaaa || !mm || !jj) return '';
+  return `${jj}/${mm}/${aaaa}`;
 }
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function getWeekStart() {
